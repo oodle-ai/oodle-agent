@@ -1,0 +1,38 @@
+{{- if .Values.policy.enable_access_restrictions }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-policy
+  labels:
+    app.kubernetes.io/name: oodle-agent
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  policy.yaml: |
+    enable_access_restrictions: true
+    allowed_endpoints:
+    {{- range .Values.policy.allowed_endpoints }}
+      - {{ . | quote }}
+    {{- end }}
+    {{- $k := .Values.policy.kubernetes }}
+    {{- if or $k.allowed_namespaces $k.allowed_resources $k.deny_resources }}
+    kubernetes:
+      {{- if $k.allowed_namespaces }}
+      allowed_namespaces:
+      {{- range $k.allowed_namespaces }}
+        - {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      {{- if $k.allowed_resources }}
+      allowed_resources:
+      {{- range $k.allowed_resources }}
+        - {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      {{- if $k.deny_resources }}
+      deny_resources:
+      {{- range $k.deny_resources }}
+        - {{ . | quote }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+{{- end }}
