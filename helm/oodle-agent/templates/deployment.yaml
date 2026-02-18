@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: oodle-agent
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oodle-agent
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oodle-agent
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+        - name: oodle-agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: OODLE_INSTANCE
+              value: {{ .Values.oodle.instance | quote }}
+            - name: OODLE_AGENT_ID
+              value: {{ .Values.oodle.agentId | quote }}
+            - name: OODLE_AGENT_NAME
+              value: {{ .Values.oodle.agentName | default .Values.oodle.agentId | quote }}
+            - name: OODLE_GATEWAY_URLS
+              value: {{ .Values.oodle.gatewayUrls | quote }}
+            {{- if .Values.existingSecret }}
+            - name: OODLE_SECRET_NAME
+              value: {{ .Values.existingSecret | quote }}
+            - name: OODLE_SECRET_NAMESPACE
+              value: {{ .Values.secretNamespace | default .Release.Namespace | quote }}
+            - name: OODLE_REGISTRATION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: registration-token
+                  optional: true
+            {{- end }}
+            {{- if .Values.policy.enable_access_restrictions }}
+            - name: OODLE_POLICY_FILE
+              value: "/etc/oodle/policy.yaml"
+            {{- end }}
+            - name: OODLE_PINNED_CA_CERT_FILE
+              value: "/etc/oodle/amazon-ca/amazon-root-ca-1.pem"
+          volumeMounts:
+            - name: cert-tmp
+              mountPath: /tmp/oodle-certs
+            - name: amazon-ca
+              mountPath: /etc/oodle/amazon-ca
+              readOnly: true
+            {{- if .Values.policy.enable_access_restrictions }}
+            - name: policy
+              mountPath: /etc/oodle
+              readOnly: true
+            {{- end }}
+          securityContext:
+            capabilities:
+              add:
+                - NET_RAW
+          resources:
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+      volumes:
+        - name: cert-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: amazon-ca
+          configMap:
+            name: {{ .Release.Name }}-amazon-ca
+        {{- if .Values.policy.enable_access_restrictions }}
+        - name: policy
+          configMap:
+            name: {{ .Release.Name }}-policy
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

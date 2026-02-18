@@ -1,0 +1,66 @@
+replicaCount: 1
+
+image:
+  repository: public.ecr.aws/oodle-ai/oodle/oodle-agent
+  tag: latest
+  pullPolicy: Always
+
+# Required configuration
+oodle:
+  instance: ""
+  agentId: ""
+  agentName: ""
+  gatewayUrls: ""
+
+# Name of an existing K8s Secret that contains the
+# registration-token literal. Created via kubectl
+# before helm install. After the agent registers,
+# mTLS certs are stored back into this same Secret.
+existingSecret: ""
+
+# Namespace for the agent secret (defaults to
+# release namespace).
+secretNamespace: ""
+
+# Agent-side access policy. When
+# enable_access_restrictions is true, the agent only
+# connects to endpoints listed in allowed_endpoints.
+# Leave empty to allow all endpoints (default).
+policy:
+  # Set to true to enforce the whitelist.
+  enable_access_restrictions: false
+  # Endpoint patterns the agent is allowed to reach.
+  # Formats: "host:port", "host", "*.example.com:443",
+  # "*:5432".
+  # Examples:
+  #   - "my-postgres.internal:5432"
+  #   - "*.prod.internal:443"
+  #   - "10.0.1.50:8080"
+  allowed_endpoints: []
+  # Kubernetes metadata access restrictions.
+  kubernetes:
+    allowed_namespaces: []
+    allowed_resources: []
+    deny_resources: []
+
+serviceAccount:
+  create: true
+  name: oodle-agent
+  annotations: {}
+
+rbac:
+  # Create ClusterRole and ClusterRoleBinding for
+  # K8s metadata access
+  create: true
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
