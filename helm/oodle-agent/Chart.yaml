@@ -1,7 +1,7 @@
 apiVersion: v2
-appVersion: 1.0.0
+appVersion: 1.0.1
 description: Helm chart for deploying the Oodle Agent that connects to Oodle Gateway
   for reverse proxy capabilities.
 name: oodle-agent
 type: application
-version: 0.1.0
+version: 0.1.1
