@@ -34,6 +34,8 @@ spec:
             {{- if .Values.existingSecret }}
             - name: OODLE_SECRET_NAME
               value: {{ .Values.existingSecret | quote }}
+            - name: OODLE_CERT_SECRET_NAME
+              value: {{ .Values.certSecret | default (printf "%s-certs" .Values.existingSecret) | quote }}
             - name: OODLE_SECRET_NAMESPACE
               value: {{ .Values.secretNamespace | default .Release.Namespace | quote }}
             - name: OODLE_REGISTRATION_TOKEN

@@ -44,9 +44,9 @@ subjects:
     namespace: {{ .Release.Namespace }}
 {{- end }}
 {{- if .Values.existingSecret }}
+{{- $certSecret := .Values.certSecret | default (printf "%s-certs" .Values.existingSecret) }}
 ---
-# Role: get/update the agent's own Secret for
-# mTLS cert persistence
+# Role: manage the agent's certificate Secret
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -56,8 +56,11 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames:
-      - {{ .Values.existingSecret }}
+      - {{ $certSecret }}
     verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

@@ -14,11 +14,16 @@ oodle:
 
 # Name of an existing K8s Secret that contains the
 # registration-token literal. Created via kubectl
-# before helm install. After the agent registers,
-# mTLS certs are stored back into this same Secret.
+# before helm install.
 existingSecret: ""
 
-# Namespace for the agent secret (defaults to
+# Name of the K8s Secret used to store mTLS
+# certificates. Created automatically by the agent
+# on first registration. Defaults to
+# <existingSecret>-certs when left empty.
+certSecret: ""
+
+# Namespace for the agent secrets (defaults to
 # release namespace).
 secretNamespace: ""
 

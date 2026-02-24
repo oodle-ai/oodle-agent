@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -19,7 +21,8 @@ const (
 )
 
 // Store reads and writes agent mTLS certificates
-// to/from the agent's Kubernetes Secret. This ensures
+// to/from a dedicated Kubernetes Secret, separate from
+// the registration-token Secret. This ensures
 // certificates survive pod rescheduling without
 // requiring a PersistentVolume.
 type Store struct {
@@ -28,9 +31,8 @@ type Store struct {
 	name      string
 }
 
-// NewStore creates a cert secret store. The secret
-// must already exist (created during agent
-// installation with the registration token).
+// NewStore creates a cert secret store. The secret is
+// created automatically on first certificate save.
 func NewStore(
 	clientset *kubernetes.Clientset,
 	namespace string,
@@ -44,13 +46,17 @@ func NewStore(
 }
 
 // HasCert checks whether the Secret already contains
-// a client certificate.
+// a client certificate. Returns false if the Secret
+// does not exist.
 func (s *Store) HasCert(
 	ctx context.Context,
 ) (bool, error) {
 	secret, err := s.clientset.CoreV1().
 		Secrets(s.namespace).
 		Get(ctx, s.name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
 	if err != nil {
 		return false, fmt.Errorf(
 			"get secret %s/%s: %w",
@@ -66,13 +72,16 @@ func (s *Store) HasCert(
 
 // LoadCert reads the TLS certificate, key, and
 // optionally the CA cert from the Secret. Returns
-// nil slices for missing keys.
+// nil slices if the Secret does not exist.
 func (s *Store) LoadCert(
 	ctx context.Context,
 ) (certPEM, keyPEM, caPEM []byte, err error) {
 	secret, err := s.clientset.CoreV1().
 		Secrets(s.namespace).
 		Get(ctx, s.name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil, nil, nil, nil
+	}
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf(
 			"get secret %s/%s: %w",
@@ -88,17 +97,56 @@ func (s *Store) LoadCert(
 }
 
 // SaveCert writes the TLS certificate, key, and CA
-// cert into the existing Secret. Preserves any other
-// keys already in the Secret (e.g. registration-token).
+// cert into a dedicated Secret. Creates the Secret if
+// it does not already exist.
 func (s *Store) SaveCert(
 	ctx context.Context,
 	certPEM []byte,
 	keyPEM []byte,
 	caPEM []byte,
 ) error {
+	data := map[string][]byte{
+		KeyTLSCert: certPEM,
+		KeyTLSKey:  keyPEM,
+	}
+	if len(caPEM) > 0 {
+		data[KeyCACert] = caPEM
+	}
+
 	secret, err := s.clientset.CoreV1().
 		Secrets(s.namespace).
 		Get(ctx, s.name, metav1.GetOptions{})
+
+	if apierrors.IsNotFound(err) {
+		newSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      s.name,
+				Namespace: s.namespace,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: data,
+		}
+		_, err = s.clientset.CoreV1().
+			Secrets(s.namespace).
+			Create(
+				ctx, newSecret,
+				metav1.CreateOptions{},
+			)
+		if err != nil {
+			return fmt.Errorf(
+				"create secret %s/%s: %w",
+				s.namespace,
+				s.name,
+				err,
+			)
+		}
+		log.Printf(
+			"Created mTLS certificate secret %s/%s",
+			s.namespace,
+			s.name,
+		)
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf(
 			"get secret %s/%s: %w",
@@ -108,20 +156,7 @@ func (s *Store) SaveCert(
 		)
 	}
 
-	if secret.Data == nil {
-		secret.Data = make(map[string][]byte)
-	}
-	secret.Data[KeyTLSCert] = certPEM
-	secret.Data[KeyTLSKey] = keyPEM
-	if len(caPEM) > 0 {
-		secret.Data[KeyCACert] = caPEM
-	}
-
-	// Remove the registration token now that we have
-	// a signed certificate. The token is single-use
-	// and should not persist in the Secret.
-	delete(secret.Data, "registration-token")
-
+	secret.Data = data
 	_, err = s.clientset.CoreV1().
 		Secrets(s.namespace).
 		Update(ctx, secret, metav1.UpdateOptions{})

@@ -68,6 +68,15 @@ func main() {
 		"K8s namespace for the agent Secret",
 	)
 
+	// Cert secret name (separate from registration
+	// token secret). Defaults to <secret-name>-certs.
+	certSecretName := flag.String(
+		"cert-secret-name",
+		envOr("OODLE_CERT_SECRET_NAME", ""),
+		"K8s Secret name for cert storage "+
+			"(defaults to <secret-name>-certs)",
+	)
+
 	// Registration token for first-time mTLS bootstrap.
 	registrationToken := flag.String(
 		"registration-token",
@@ -187,14 +196,20 @@ func main() {
 		)
 	}
 
-	// Load mTLS certs from K8s Secret if configured.
-	// This ensures certs survive pod rescheduling.
+	// Derive cert secret name if not explicitly set.
+	if *certSecretName == "" && *secretName != "" {
+		*certSecretName = *secretName + "-certs"
+	}
+
+	// Load mTLS certs from the dedicated cert Secret.
+	// This is separate from the registration-token
+	// Secret so credentials are isolated.
 	var certStore *certsecret.Store
-	if *secretName != "" && k8sClient != nil {
+	if *certSecretName != "" && k8sClient != nil {
 		certStore = certsecret.NewStore(
 			k8sClient.Clientset(),
 			*secretNamespace,
-			*secretName,
+			*certSecretName,
 		)
 		ctx := context.Background()
 		hasCert, chkErr := certStore.HasCert(ctx)
@@ -204,8 +219,6 @@ func main() {
 				chkErr,
 			)
 		} else if hasCert {
-			// Cert exists in Secret -- write to
-			// local files for TLS stack.
 			if wErr := certStore.WriteCertToFiles(
 				ctx,
 				defaultCertFile,
@@ -217,8 +230,6 @@ func main() {
 					wErr,
 				)
 			}
-			// Use these paths unless explicitly
-			// overridden by flags.
 			if *tlsCertFile == "" {
 				*tlsCertFile = defaultCertFile
 			}
@@ -232,14 +243,14 @@ func main() {
 				"Loaded mTLS cert from secret "+
 					"%s/%s",
 				*secretNamespace,
-				*secretName,
+				*certSecretName,
 			)
 		} else {
 			log.Printf(
 				"No certificate in secret %s/%s "+
 					"-- will register with token",
 				*secretNamespace,
-				*secretName,
+				*certSecretName,
 			)
 		}
 	}
