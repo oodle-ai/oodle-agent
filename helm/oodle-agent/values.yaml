@@ -2,8 +2,8 @@ replicaCount: 1
 
 image:
   repository: public.ecr.aws/oodle-ai/oodle/oodle-agent
-  tag: latest
-  pullPolicy: Always
+  tag: ""
+  pullPolicy: IfNotPresent
 
 # Required configuration
 oodle:
