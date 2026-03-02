@@ -54,7 +54,7 @@ helm upgrade --install oodle-agent oodle-ai/oodle-agent \
 ### Via Docker
 
 ```bash
-docker run public.ecr.aws/oodle-ai/oodle/oodle-agent:latest \
+docker run public.ecr.aws/oodle-ai/oodle/oodle-agent:<VERSION> \
   --instance=<INSTANCE_ID> \
   --agent-id=<AGENT_ID> \
   --agent-name=<AGENT_NAME> \
@@ -104,7 +104,7 @@ variables:
 |-------|---------|-------------|
 | replicaCount | 1 | Number of agent replicas |
 | image.repository | public.ecr.aws/oodle-ai/oodle/oodle-agent | Image |
-| image.tag | latest | Image tag |
+| image.tag | Chart appVersion | Image tag |
 | oodle.instance | "" | Instance ID (required) |
 | oodle.agentId | "" | Agent ID (required) |
 | oodle.agentName | "" | Agent name |
@@ -189,34 +189,23 @@ go test ./...
 
 ### Docker Image (ECR Public)
 
-Docker images are published to AWS ECR Public.
+Docker images are published to AWS ECR Public using
+versioned tags. The `TAG` is set in the Makefile and
+`check-tag` prevents overwriting an existing image.
 
 ```bash
-# Set variables
-ECR_ALIAS=oodle-ai
-REPO_NAME=oodle/oodle-agent
-TAG=latest
+# Authenticate
+make ecr-login
 
-# Authenticate Docker to ECR Public
-aws ecr-public get-login-password \
-  --region us-east-1 \
-  | docker login \
-  --username AWS \
-  --password-stdin \
-  public.ecr.aws/${ECR_ALIAS}
+# Build and push (fails if tag already exists)
+make image-push
 
-# Build the image (multi-arch)
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -t public.ecr.aws/${ECR_ALIAS}/${REPO_NAME}:${TAG} \
-  --push .
-
-# Or single-arch build + push
-docker build \
-  -t public.ecr.aws/${ECR_ALIAS}/${REPO_NAME}:${TAG} .
-docker push \
-  public.ecr.aws/${ECR_ALIAS}/${REPO_NAME}:${TAG}
+# Sign the image
+make image-sign
 ```
+
+To release a new version, bump `TAG` in the Makefile
+and run the above commands.
 
 ### Helm Chart (GitHub Pages)
 
