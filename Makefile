@@ -48,7 +48,7 @@ check-tag: ## Fail if TAG already exists in ECR
 		--image-ids imageTag=$(TAG) \
 		>/dev/null 2>&1; then \
 		echo "ERROR: tag $(TAG) already exists" \
-			"in ECR. Bump TAG in Makefile."; \
+			"in ECR. Bump appVersion in $(CHART_DIR)/Chart.yaml."; \
 		exit 1; \
 	fi
 
